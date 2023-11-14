@@ -9,7 +9,7 @@ resource "azurerm_resource_group" "rg-cloudshoes-prd" {
 
 resource "azurerm_virtual_network" "vnet-hub" {
   name                = "vnet-hub"
-  location            = "eastus"
+  location            = var.vnet-hub_location
   resource_group_name = azurerm_resource_group.rg-cloudshoes-prd.name
   address_space       = ["10.10.0.0/16"]
 
@@ -34,7 +34,7 @@ resource "azurerm_subnet" "sub-adds" {
 
 resource "azurerm_virtual_network" "vnet-spoke01" {
   name                = "vnet-spoke01"
-  location            = "centralus"
+  location            = var.vnet-spoke01_location
   resource_group_name = azurerm_resource_group.rg-cloudshoes-prd.name
   address_space       = ["10.20.0.0/16"]
 
@@ -85,7 +85,7 @@ resource "azurerm_network_security_group" "nsg-spoke01" {
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = ["1433", "3389"]
+    destination_port_range     = "1433-3389"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
@@ -200,6 +200,12 @@ resource "azurerm_virtual_machine" "vm-app" {
     "Cenario" = "IaaS"
   }
 
+  # Uncomment this line to delete the OS disk automatically when deleting the VM
+  # delete_os_disk_on_termination = true
+
+  # Uncomment this line to delete the data disks automatically when deleting the VM
+  # delete_data_disks_on_termination = true
+
   storage_image_reference {
     publisher = "MicrosoftWindowsServer"
     offer     = "WindowsServer"
@@ -208,7 +214,7 @@ resource "azurerm_virtual_machine" "vm-app" {
   }
 
   storage_os_disk {
-    name              = "osdisk-app"
+    name              = "app-disk"
     caching           = "ReadWrite"
     create_option     = "FromImage"
     managed_disk_type = "StandardSSD_LRS"
@@ -216,11 +222,12 @@ resource "azurerm_virtual_machine" "vm-app" {
 
   os_profile {
     computer_name  = "vm-app"
-    admin_username = "admin-jefferson"
-    admin_password = "Partiunuvem2023"
+    admin_username = var.vm_admin_username
+    admin_password = var.vm_admin_password
   }
 
   os_profile_windows_config {
+    timezone           = "E. South America Standard Time"
     provision_vm_agent = true
   }
 
@@ -258,6 +265,12 @@ resource "azurerm_virtual_machine" "vm-adds" {
     "Cenario" = "IaaS"
   }
 
+  # Uncomment this line to delete the OS disk automatically when deleting the VM
+  # delete_os_disk_on_termination = true
+
+  # Uncomment this line to delete the data disks automatically when deleting the VM
+  # delete_data_disks_on_termination = true
+
   storage_image_reference {
     publisher = "MicrosoftWindowsServer"
     offer     = "WindowsServer"
@@ -266,7 +279,7 @@ resource "azurerm_virtual_machine" "vm-adds" {
   }
 
   storage_os_disk {
-    name              = "osdisk-adds"
+    name              = "adds-disk"
     caching           = "ReadWrite"
     create_option     = "FromImage"
     managed_disk_type = "StandardSSD_LRS"
@@ -274,10 +287,14 @@ resource "azurerm_virtual_machine" "vm-adds" {
 
   os_profile {
     computer_name  = "vm-adds"
-    admin_username = "admin-jefferson"
-    admin_password = "Partiunuvem2023"
+    admin_username = var.vm_admin_username
+    admin_password = var.vm_admin_password
   }
 
+  os_profile_windows_config {
+    timezone           = "E. South America Standard Time"
+    provision_vm_agent = true
+  }
 
   #  diagnostics_profile {
   #    boot_diagnostics {
@@ -302,23 +319,21 @@ resource "azurerm_dev_test_global_vm_shutdown_schedule" "shutdown-adds" {
   }
 }
 
-#vm-db
-
-#
-resource "azurerm_private_endpoint" "vm-sql-private-endpoint" {
-  name                = "vm-sql-private-endpoint"
+resource "azurerm_private_endpoint" "vm-db-private-endpoint" {
+  name                = "vm-db-private-endpoint"
   location            = azurerm_resource_group.rg-cloudshoes-prd.location
   resource_group_name = azurerm_resource_group.rg-cloudshoes-prd.name
   subnet_id           = azurerm_subnet.sub-db.id
 
   private_service_connection {
-    name                           = "vm-sql-privateserviceconnection"
+    name                           = "vm-db-privateserviceconnection"
     private_connection_resource_id = azurerm_virtual_machine.vm-db.id
     subresource_names              = ["blob"]
     is_manual_connection           = false
   }
 }
 
+#vm-db
 resource "azurerm_virtual_machine" "vm-db" {
   name                  = "vm-db"
   location              = var.vnet-spoke01_location
@@ -330,19 +345,50 @@ resource "azurerm_virtual_machine" "vm-db" {
     "Cenario"  = "IaaS"
   }
 
+  # Uncomment this line to delete the OS disk automatically when deleting the VM
+  # delete_os_disk_on_termination = true
+
+  # Uncomment this line to delete the data disks automatically when deleting the VM
+  # delete_data_disks_on_termination = true
+
+  # storage_image_reference {
+  #   publisher = "MicrosoftSQLServer"
+  #   offer     = "WS2022"
+  #   sku       = "SQLDEV"
+  #   version   = "latest"
+  # }
+  
   storage_image_reference {
-    publisher = "MicrosoftSQLServer"
-    offer     = "SQL2022-WS2022"
-    sku       = "SQLDEV"
+    publisher = "MicrosoftWindowsServer"
+    offer     = "WindowsServer"
+    sku       = "2022-Datacenter"
     version   = "latest"
   }
 
   storage_os_disk {
-    name              = "osdisk-db"
+    name              = "db-disk"
     caching           = "ReadWrite"
     create_option     = "FromImage"
     managed_disk_type = "Premium_LRS"
   }
+
+  os_profile {
+    computer_name  = "vm-db"
+    admin_username = var.vm_admin_username
+    admin_password = var.vm_admin_password
+  }
+
+  os_profile_windows_config {
+    timezone           = "E. South America Standard Time"
+    provision_vm_agent = true
+  }
+
+  #  diagnostics_profile {
+  #    boot_diagnostics {
+  #      enabled     = true
+  #      storage_uri = azurerm_storage_account.sa-bootdiag.primary_blob_endpoint
+  #    }
+  #  }
 
   storage_data_disk {
     name              = "data"
@@ -361,22 +407,22 @@ resource "azurerm_virtual_machine" "vm-db" {
     disk_size_gb      = 8
     lun               = 2
   }
+}
 
-  os_profile {
-    computer_name  = "vm-db"
-    admin_username = "admsql"
-    admin_password = "Partiunuvem@2023"
-  }
+resource "azurerm_mssql_server" "ms-sql-server" {
+  name                         = "cloudshoes-sql-server"
+  resource_group_name          = azurerm_resource_group.rg-cloudshoes-prd.name
+  location                     = azurerm_resource_group.rg-cloudshoes-prd.location
+  version                      = "12.0"
+  administrator_login          = "admsql"
+  administrator_login_password = "Partiunuvem@2023"
+  minimum_tls_version          = "1.2"
 
-  os_profile_windows_config {
-    provision_vm_agent = true
-  }
+  # Integração ao AD, consultar: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_server
 
-  #  diagnostics_profile {
-  #    boot_diagnostics {
-  #      enabled     = true
-  #      storage_uri = azurerm_storage_account.sa-bootdiag.primary_blob_endpoint
-  #    }
+  #  azuread_administrator {
+  #    login_username = azurerm_user_assigned_identity.example.name
+  #    object_id      = azurerm_user_assigned_identity.example.principal_id
   #  }
 }
 
