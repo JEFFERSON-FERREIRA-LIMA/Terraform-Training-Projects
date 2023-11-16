@@ -1,9 +1,11 @@
+# resource group
 resource "azurerm_resource_group" "rg-cloudshoes-prd" {
   location = var.vnet-hub_location
   name     = "rg-cloudshoes-prd"
   tags = {
     "Ambiente" = "prd"
     "Cenario"  = "IaaS"
+    "ManagedBy" = "terraform"
   }
 }
 
@@ -15,6 +17,7 @@ resource "azurerm_virtual_network" "vnet-hub" {
 
   tags = {
     "Ambiente" = "prd"
+    "ManagedBy" = "terraform"
   }
 }
 
@@ -40,6 +43,7 @@ resource "azurerm_virtual_network" "vnet-spoke01" {
 
   tags = {
     "Ambiente" = "prd"
+    "ManagedBy" = "terraform"
   }
 }
 
@@ -51,26 +55,82 @@ resource "azurerm_subnet" "sub-db" {
 }
 
 # 2 Network Security Groups and rules
-resource "azurerm_network_security_group" "nsg-hub-01" {
-  name                = "nsg-hub-01"
+resource "azurerm_network_security_group" "nsg-hub01" {
+  name                = "nsg-hub01"
   location            = var.vnet-hub_location
   resource_group_name = azurerm_resource_group.rg-cloudshoes-prd.name
 
+  tags = {
+    "Ambiente" = "prd"
+    "ManagedBy" = "terraform"
+  }
+
+  #Inbound Rules
   security_rule {
-    name                       = "RDP"
-    priority                   = 1001
+    name                       = "AllowAnyRDPInBound"
+    description                = "Liberação de acesso às VMs"
+    priority                   = 300
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "3389"
     source_address_prefix      = "*"
-    destination_address_prefix = "*"
+    destination_address_prefix = "10.10.1.4-10.10.2.4"
+
   }
 
-  tags = {
-    "Ambiente" = "prd"
-  }
+
+  #  security_rule {
+  #    name                       = "AllowVnetInBoundRDP"
+  #    priority                   = 1001
+  #    direction                  = "Inbound"
+  #    access                     = "Allow"
+  #    protocol                   = "Tcp"
+  #    source_port_range          = "*"
+  #    destination_port_range     = "3389"
+  #    source_address_prefix      = "*"
+  #    destination_address_prefix = "*"
+  #
+  #  }
+
+  #security_rule {
+  #  name                       = "AllowAzureLoadBalancer"
+  #  priority                   = 1002
+  #  direction                  = "Inbound"
+  #  access                     = "Allow"
+  #  protocol                   = "Tcp"
+  #  source_port_range          = "*"
+  #  destination_port_range     = "3389"
+  #  source_address_prefix = "*"
+  #  destination_address_prefix = "*"
+  #
+  #}
+  #security_rule {
+  #  name                       = "AllowVnetInBoundRDP"
+  #  priority                   = 1001
+  #  direction                  = "Inbound"
+  #  access                     = "Allow"
+  #  protocol                   = "Tcp"
+  #  source_port_range          = "*"
+  #  destination_port_range     = "3389"
+  #  source_address_prefix = "*"
+  #  destination_address_prefix = "*"
+  #}
+  #security_rule {
+  #  name                       = "AllowVnetInBoundRDP"
+  #  priority                   = 1001
+  #  direction                  = "Inbound"
+  #  access                     = "Allow"
+  #  protocol                   = "Tcp"
+  #  source_port_range          = "*"
+  #  destination_port_range     = "3389"
+  #  source_address_prefix = "*"
+  #  destination_address_prefix = "*"
+  #}
+
+  #Outbound Rules
+
 }
 
 resource "azurerm_network_security_group" "nsg-spoke01" {
@@ -78,33 +138,36 @@ resource "azurerm_network_security_group" "nsg-spoke01" {
   location            = var.vnet-spoke01_location
   resource_group_name = azurerm_resource_group.rg-cloudshoes-prd.name
 
+  tags = {
+    "Ambiente" = "prd"
+    "ManagedBy" = "terraform"
+  }
+
+ #Inbound Rules
   security_rule {
-    name                       = "RDP_SQL"
-    priority                   = 1001
+    name                       = "AllowAnyRDPInBound"
+    description                = "Liberação de acesso às VMs"
+    priority                   = 300
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "1433-3389"
     source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
+    destination_address_prefix = "10.20.1.4"
 
-  tags = {
-    "Ambiente" = "prd"
   }
 }
-
 
 #association nsgs to subnets
 resource "azurerm_subnet_network_security_group_association" "app-nsg-association" {
   subnet_id                 = azurerm_subnet.sub-app.id
-  network_security_group_id = azurerm_network_security_group.nsg-hub-01.id
+  network_security_group_id = azurerm_network_security_group.nsg-hub01.id
 }
 
 resource "azurerm_subnet_network_security_group_association" "adds-nsg-association" {
   subnet_id                 = azurerm_subnet.sub-adds.id
-  network_security_group_id = azurerm_network_security_group.nsg-hub-01.id
+  network_security_group_id = azurerm_network_security_group.nsg-hub01.id
 }
 
 resource "azurerm_subnet_network_security_group_association" "db-nsg-association" {
@@ -174,7 +237,7 @@ resource "azurerm_network_interface" "nic-db" {
 
 #vnets peering
 resource "azurerm_virtual_network_peering" "vnet-hub_to_vnet-spoke01" {
-  name                         = "vnet-hub_to_vnet-spoke01"
+  name                         = "hub-to-spoke01"
   resource_group_name          = azurerm_resource_group.rg-cloudshoes-prd.name
   virtual_network_name         = azurerm_virtual_network.vnet-hub.name
   remote_virtual_network_id    = azurerm_virtual_network.vnet-spoke01.id
@@ -182,7 +245,7 @@ resource "azurerm_virtual_network_peering" "vnet-hub_to_vnet-spoke01" {
 }
 
 resource "azurerm_virtual_network_peering" "vnet-spoke01_to_vnet-hub" {
-  name                         = "vnet-spoke01_to_vnet-hub"
+  name                         = "spoke01-to-hub"
   resource_group_name          = azurerm_resource_group.rg-cloudshoes-prd.name
   virtual_network_name         = azurerm_virtual_network.vnet-spoke01.name
   remote_virtual_network_id    = azurerm_virtual_network.vnet-hub.id
@@ -343,6 +406,7 @@ resource "azurerm_virtual_machine" "vm-db" {
   tags = {
     "Ambiente" = "prd"
     "Cenario"  = "IaaS"
+    "ManagedBy" = "terraform"
   }
 
   # Uncomment this line to delete the OS disk automatically when deleting the VM
@@ -357,7 +421,7 @@ resource "azurerm_virtual_machine" "vm-db" {
   #   sku       = "SQLDEV"
   #   version   = "latest"
   # }
-  
+
   storage_image_reference {
     publisher = "MicrosoftWindowsServer"
     offer     = "WindowsServer"
